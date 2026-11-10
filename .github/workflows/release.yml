@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build Windows installer and publish release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend tests
+        run: pnpm test
+
+      - name: Rust tests
+        run: cargo test --lib --manifest-path src-tauri/Cargo.toml
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "Proxy RS v__VERSION__"
+          releaseBody: |
+            ## Proxy RS v__VERSION__
+
+            轻量、无认证的 Windows SOCKS5 桌面代理，基于 Tauri 2 + Vue 3。
+
+            ### 安装
+
+            - 支持 Windows 10/11 x64。
+            - 安装时可选择 **仅为我安装** 或 **为所有用户安装**（所有用户需要管理员权限）。
+            - 安装时可自定义安装目录。
+            - 安装包未做代码签名，Windows SmartScreen 可能提示；选择“更多信息 → 仍要运行”即可。
+
+            ### 功能
+
+            - 选择本机网卡与 IP、端口（1–65535）启动代理。
+            - 无认证 SOCKS5，支持 TCP `CONNECT` 与可选 UDP `UDP ASSOCIATE`。
+            - 未勾选的协议返回 `0x07 Command not supported`。
+            - 只监听所选 IP，运行中可复制端点并查看运行时长。
+            - 关闭应用自动停止代理并释放端口。
+
+            ### 注意
+
+            本工具不提供用户名/密码认证。绑定非回环地址时，同一局域网内的设备都可以访问，请只在可信网络使用。
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: false
+          args: --bundles nsis
