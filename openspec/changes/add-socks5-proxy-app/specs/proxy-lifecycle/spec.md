@@ -8,7 +8,13 @@
 
 ### Requirement: Validated start
 
-系统 SHALL 在监听前校验：所选 IP 属于本机网卡、端口为 1–65535 的整数、至少启用一种传输协议。任一校验失败 MUST 拒绝启动、不创建监听套接字，并返回指明字段与原因的错误。
+系统 SHALL 在监听前校验：所选 IP 属于本机网卡或为通用地址 `0.0.0.0`、端口为 1–65535 的整数、至少启用一种传输协议。任一校验失败 MUST 拒绝启动、不创建监听套接字，并返回指明字段与原因的错误。
+
+#### Scenario: Wildcard address starts listening
+
+- **WHEN** 用户提交 `0.0.0.0` 与可用端口 1080
+- **THEN** 系统在全部 IPv4 网卡上监听该端口
+- **AND** 本机通过 `127.0.0.1:1080` 可连接
 
 #### Scenario: Valid configuration starts listening
 

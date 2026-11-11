@@ -96,6 +96,7 @@ fn new_socket(address: SocketAddr, source_ip: IpAddr) -> Result<TcpSocket, Conne
     let socket = create().map_err(ConnectError::Io)?;
     if source_ip.is_ipv4() == address.is_ipv4()
         && !source_ip.is_loopback()
+        && !source_ip.is_unspecified()
         && let Err(error) = socket.bind(SocketAddr::new(source_ip, 0))
     {
         eprintln!("[proxy-rs] 绑定源地址 {source_ip} 失败，回退默认路由：{error}");

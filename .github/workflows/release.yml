@@ -70,7 +70,7 @@ jobs:
 
             ### 功能
 
-            - 选择本机网卡与 IP、端口（1–65535）启动代理。
+            - 选择本机网卡与 IP，或使用 0.0.0.0 监听所有网卡；端口 1–65535。
             - 无认证 SOCKS5，支持 TCP `CONNECT` 与可选 UDP `UDP ASSOCIATE`。
             - 未勾选的协议返回 `0x07 Command not supported`。
             - 只监听所选 IP，运行中可复制端点并查看运行时长。

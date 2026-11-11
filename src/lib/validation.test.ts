@@ -64,9 +64,17 @@ describe('pickDefaultInterface', () => {
     family: 'ipv4',
     isLoopback: true,
   }
+  const wildcard: InterfaceAddress = {
+    id: 'all|0.0.0.0',
+    name: '所有网卡',
+    ip: '0.0.0.0',
+    family: 'ipv4',
+    isLoopback: false,
+  }
 
   it('prefers a non-loopback ipv4 interface', () => {
     const result = pickDefaultInterface([
+      wildcard,
       base,
       { ...base, id: 'b', ip: '::1', family: 'ipv6' },
       { ...base, id: 'c', ip: '192.168.1.2', isLoopback: false },
@@ -76,10 +84,15 @@ describe('pickDefaultInterface', () => {
 
   it('falls back to a non-loopback address', () => {
     const result = pickDefaultInterface([
+      wildcard,
       base,
       { ...base, id: 'b', ip: '2001:db8::1', family: 'ipv6', isLoopback: false },
     ])
     expect(result?.id).toBe('b')
+  })
+
+  it('never defaults to the wildcard address when a real one exists', () => {
+    expect(pickDefaultInterface([wildcard, base])?.id).toBe('a')
   })
 
   it('falls back to the first item', () => {

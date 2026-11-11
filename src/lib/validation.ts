@@ -51,13 +51,15 @@ export function isFormValid(
   return interfaceId.length > 0 && validatePort(port).ok && protocols.length > 0
 }
 
-/** 默认选中第一个非回环 IPv4；否则第一个非回环地址；再否则第一项。 */
+/** 默认选中第一个非回环、非通配的 IPv4；其次非回环地址；再否则第一项。 */
 export function pickDefaultInterface(
   interfaces: InterfaceAddress[],
 ): InterfaceAddress | undefined {
+  const real = interfaces.filter((item) => item.ip !== '0.0.0.0')
   return (
-    interfaces.find((item) => !item.isLoopback && item.family === 'ipv4') ??
-    interfaces.find((item) => !item.isLoopback) ??
+    real.find((item) => !item.isLoopback && item.family === 'ipv4') ??
+    real.find((item) => !item.isLoopback) ??
+    real[0] ??
     interfaces[0]
   )
 }

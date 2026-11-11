@@ -64,6 +64,19 @@ describe('groupInterfaces', () => {
     })
     expect(groups[2].options[0].label).toContain('回环')
   })
+
+  it('labels the wildcard all-interfaces option', () => {
+    const groups = groupInterfaces([
+      {
+        id: 'all|0.0.0.0',
+        name: '所有网卡',
+        ip: '0.0.0.0',
+        family: 'ipv4',
+        isLoopback: false,
+      },
+    ])
+    expect(groups[0].options[0].label).toBe('0.0.0.0 · 所有网卡')
+  })
 })
 
 describe('filterInterfaceOption', () => {

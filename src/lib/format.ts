@@ -20,9 +20,17 @@ export function groupInterfaces(interfaces: InterfaceAddress[]): InterfaceSelect
 }
 
 function optionLabel(item: InterfaceAddress): string {
+  if (isWildcardInterface(item)) {
+    return '0.0.0.0 · 所有网卡'
+  }
   const family = item.family === 'ipv4' ? 'IPv4' : 'IPv6'
   const loopback = item.isLoopback ? ' · 回环' : ''
   return `${item.ip} · ${family}${loopback}`
+}
+
+/** `0.0.0.0` 是通用的“监听所有网卡”选项，不是真实网卡地址。 */
+export function isWildcardInterface(item: InterfaceAddress): boolean {
+  return item.ip === '0.0.0.0'
 }
 
 /** 按名称、IP 或地址族过滤下拉项。 */
