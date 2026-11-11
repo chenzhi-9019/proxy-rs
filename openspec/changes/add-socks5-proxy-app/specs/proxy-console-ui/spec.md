@@ -101,12 +101,17 @@
 
 ### Requirement: LAN exposure warning
 
-当所选 IP 不是回环地址时，界面 MUST 显示无认证代理可被局域网访问的风险提示；选择回环地址时该提示隐藏。
+当所选 IP 不是回环地址时（包括通用地址 `0.0.0.0`），界面 MUST 显示无认证代理可被局域网访问的风险提示；选择回环地址时该提示隐藏。
 
 #### Scenario: Non-loopback selected
 
 - **WHEN** 用户选择 `192.168.x.x` 等非回环地址
 - **THEN** 在三行输入附近显示醒目的无认证暴露提示
+
+#### Scenario: Wildcard selected
+
+- **WHEN** 用户选择 `0.0.0.0 · 所有网卡`
+- **THEN** 提示会监听所有网卡，并说明本机用 `127.0.0.1`、其他设备用本机局域网 IP
 
 #### Scenario: Loopback selected
 

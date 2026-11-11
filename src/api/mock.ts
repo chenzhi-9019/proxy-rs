@@ -10,6 +10,13 @@ import type {
 
 const interfaces: InterfaceAddress[] = [
   {
+    id: 'all|0.0.0.0',
+    name: '所有网卡',
+    ip: '0.0.0.0',
+    family: 'ipv4',
+    isLoopback: false,
+  },
+  {
     id: '以太网|192.168.1.23',
     name: '以太网',
     ip: '192.168.1.23',

@@ -50,7 +50,7 @@
 
 ### Requirement: Egress bound to selected source address
 
-服务 SHALL 在地址族匹配且所选源地址非回环时把上游 TCP 套接字绑定到该源 IP；当地址族不匹配、源地址为回环或绑定失败时 MUST 回退到系统默认路由，且不因此拒绝客户端请求。
+服务 SHALL 在地址族匹配且所选源地址非回环、非通配时把上游 TCP 套接字绑定到该源 IP；当地址族不匹配、源地址为回环、源地址为 `0.0.0.0` 或绑定失败时 MUST 回退到系统默认路由，且不因此拒绝客户端请求。
 
 #### Scenario: Same-family egress binding
 

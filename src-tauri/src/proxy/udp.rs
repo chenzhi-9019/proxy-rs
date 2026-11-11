@@ -134,11 +134,12 @@ async fn bind_upstream(ipv4: bool, bind_ip: IpAddr) -> std::io::Result<UdpSocket
     } else {
         SocketAddr::new(IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED), 0)
     };
-    let preferred = if !bind_ip.is_loopback() && ipv4 == bind_ip.is_ipv4() {
-        SocketAddr::new(bind_ip, 0)
-    } else {
-        unspecified
-    };
+    let preferred =
+        if !bind_ip.is_loopback() && !bind_ip.is_unspecified() && ipv4 == bind_ip.is_ipv4() {
+            SocketAddr::new(bind_ip, 0)
+        } else {
+            unspecified
+        };
 
     match UdpSocket::bind(preferred).await {
         Ok(socket) => Ok(socket),

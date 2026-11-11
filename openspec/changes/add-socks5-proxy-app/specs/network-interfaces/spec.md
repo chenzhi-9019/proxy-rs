@@ -44,6 +44,23 @@
 - **THEN** 两个地址项都保留并以网卡名区分
 - **AND** 标识不冲突
 
+### Requirement: All-interfaces wildcard option
+
+系统 SHALL 在可选地址列表中提供通用地址 `0.0.0.0`，展示为“所有网卡”，用于监听本机全部 IPv4 网卡。该项 MUST 与真实网卡项一样参与选择、刷新、状态回显，并标记为非回环。
+
+#### Scenario: Select wildcard address
+
+- **WHEN** 用户选择 `0.0.0.0 · 所有网卡`
+- **THEN** 启动参数包含 `ip = 0.0.0.0`
+- **AND** 代理监听本机全部 IPv4 网卡
+- **AND** 界面提示本机客户端使用 `127.0.0.1`
+
+#### Scenario: Default selection avoids wildcard
+
+- **WHEN** 本机存在真实网卡地址
+- **THEN** 首次加载默认选中真实非回环 IPv4 地址
+- **AND** 不自动选择 `0.0.0.0`
+
 ### Requirement: On-demand refresh
 
 界面 SHALL 允许用户在不重启应用的情况下重新枚举网卡；刷新 MUST 返回当前最新的地址集合。

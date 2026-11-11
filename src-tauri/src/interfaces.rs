@@ -8,12 +8,13 @@ use if_addrs::{Interface, get_if_addrs};
 use crate::error::AppError;
 use crate::model::{AddressFamily, InterfaceAddress};
 
-/// 枚举本机所有可绑定的网卡地址。
+/// 枚举本机所有可绑定的网卡地址，并追加通用的 `0.0.0.0` 选项。
 ///
 /// 过滤规则：
-/// - 跳过未指定地址（`0.0.0.0` / `::`）；
+/// - 跳过真实网卡上的未指定地址；
 /// - 跳过 IPv6 链路本地地址（`fe80::/10`），因为跨平台绑定需要 scope id；
-/// - 保留回环、虚拟网卡与 IPv4 链路本地地址。
+/// - 保留回环、虚拟网卡与 IPv4 链路本地地址；
+/// - 在列表首位插入“所有网卡（0.0.0.0）”，供需要监听全部网卡的场景选择。
 pub fn enumerate() -> Result<Vec<InterfaceAddress>, AppError> {
     let interfaces = get_if_addrs().map_err(AppError::interface_error)?;
     let mut raw: Vec<RawInterface> = interfaces.into_iter().map(RawInterface::from).collect();
@@ -33,7 +34,18 @@ pub fn enumerate() -> Result<Vec<InterfaceAddress>, AppError> {
         }
     }
 
-    Ok(build_addresses(raw))
+    let mut addresses = build_addresses(raw);
+    addresses.insert(
+        0,
+        InterfaceAddress {
+            id: "all|0.0.0.0".into(),
+            name: "所有网卡".into(),
+            ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            family: AddressFamily::Ipv4,
+            is_loopback: false,
+        },
+    );
+    Ok(addresses)
 }
 
 /// 枚举过程中的中间结构，便于在不依赖系统 API 的情况下单测过滤与排序。
@@ -196,6 +208,8 @@ mod tests {
     fn enumerates_the_local_machine() {
         let addresses = enumerate().expect("enumerate interfaces");
         assert!(!addresses.is_empty(), "expected at least one local address");
+        assert_eq!(addresses[0].ip, "0.0.0.0".parse::<IpAddr>().unwrap());
+        assert_eq!(addresses[0].name, "所有网卡");
         let ids: HashSet<&str> = addresses.iter().map(|item| item.id.as_str()).collect();
         assert_eq!(ids.len(), addresses.len(), "ids must be unique");
         assert!(

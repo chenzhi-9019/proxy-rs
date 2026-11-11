@@ -17,6 +17,7 @@ import {
 import {
   filterInterfaceOption,
   groupInterfaces,
+  isWildcardInterface,
 } from '../lib/format'
 import type { InterfaceAddress, Transport } from '../types'
 
@@ -46,8 +47,12 @@ const selected = computed(() =>
 )
 
 const warningMessage = computed(() => {
+  const portText = port.value ? `:${port.value}` : ''
+  if (selected.value && isWildcardInterface(selected.value)) {
+    return `通用地址 0.0.0.0${portText} 会监听所有网卡：本机客户端用 127.0.0.1，其他设备用本机局域网 IP。无认证，请仅在可信网络使用`
+  }
   const address = selected.value
-    ? `${selected.value.ip}${port.value ? `:${port.value}` : ''}`
+    ? `${selected.value.ip}${portText}`
     : '所选地址'
   return `无认证代理 · ${address} 对同一局域网内的设备可见，请仅在可信网络使用`
 })
@@ -78,7 +83,7 @@ function toggle(transport: Transport): void {
         <span class="step-index" aria-hidden="true">01</span>
         <div class="row-title">
           <label for="endpoint-select">网卡与地址</label>
-          <p>代理将只监听这个 IP</p>
+          <p>选择具体 IP，或 0.0.0.0 监听所有网卡</p>
         </div>
         <AButton
           class="refresh-button"

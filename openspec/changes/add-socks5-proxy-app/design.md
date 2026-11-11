@@ -109,16 +109,18 @@ struct ProxyRuntime {
 
 - 过滤 IPv6 链路本地地址（`fe80::/10`，`Interface::is_link_local` 且为 V6）；这类地址在 Windows 上绑定需要 scope id，而 `if-addrs` 不提供，强行展示只会产生不可用选项。
 - 保留回环、虚拟网卡、IPv4 链路本地地址；排序键：`oper_status == Up` 优先 → 非回环优先 → IPv4 优先 → 网卡名 → IP。
+- 在列表首位插入通用项 `0.0.0.0`（名称“所有网卡”），用于监听全部 IPv4 网卡；它不是真实网卡地址，但后端允许作为通配绑定地址。
 - `id = "{interface_name}|{ip}"`，并做去重；同一网卡多地址产生多个条目。
-- 展示名由前端生成：`{网卡名} · {IP}`，回环追加“回环”标签，IPv6 追加“IPv6”。
-- 默认选中第一个非回环 IPv4；没有时选第一个非回环地址；再没有才选回环。
+- 展示名由前端生成：`{网卡名} · {IP}`，回环追加“回环”标签，IPv6 追加“IPv6”；通配项显示为 `0.0.0.0 · 所有网卡`。
+- 默认选中第一个非回环、非通配 IPv4；没有时选第一个非回环地址；再没有才选回环。通配地址不会被自动选中。
 
 `ProxyConfig.interface_name` 仅用于错误信息与状态回显；后端以 IP 为准并再次确认它仍属于本机，避免网卡重命名造成误绑定。
 
 ### D5. 绑定与出站
 
-- 监听：`TcpListener::bind(SocketAddr::new(config.ip, config.port))`，只绑定该单播地址，不用 `0.0.0.0`。
-- 上游 TCP：按目标地址族创建 `TcpSocket`；当地址族与所选源 IP 一致且源 IP 非回环时，`bind(SocketAddr::new(source_ip, 0))`；绑定失败记录并回退到未绑定套接字，不让请求失败（对应 `socks5-service` 的 “Egress bound to selected source address”）。
+- 监听：`TcpListener::bind(SocketAddr::new(config.ip, config.port))`。选择具体网卡时只绑定该单播地址；选择 `0.0.0.0` 时监听全部 IPv4 网卡，界面必须展示局域网暴露警告。
+- 上游 TCP：按目标地址族创建 `TcpSocket`；当地址族与所选源 IP 一致、源 IP 非回环且非 `0.0.0.0` 时，`bind(SocketAddr::new(source_ip, 0))`；绑定失败记录并回退到未绑定套接字，不让请求失败（对应 `socks5-service` 的 “Egress bound to selected source address”）。
+- UDP 中继绑定 `0.0.0.0` 时，成功回复使用控制连接实际使用的本地地址（例如 `127.0.0.1`），避免返回不可连接的 `0.0.0.0`。
 - 域名通过 `tokio::net::lookup_host` 解析，逐个尝试，连接超时 10s；全部失败映射为 host unreachable。
 - 控制连接与中继均设置 `TCP_NODELAY`；`copy_bidirectional` 处理半关闭。
 - 监听端口不做 `SO_REUSEADDR`，确保“端口被占用”能被真实检测并反馈。
@@ -289,13 +291,13 @@ interface ProxyStatus {
 - `productName: "Proxy RS"`，`identifier: "dev.proxyrs.app"`，窗口标题 `Proxy RS · SOCKS5 代理`，尺寸见 D9，`resizable: true`。
 - 能力最小化：仅 `core:default` 与 `clipboard-manager:allow-write-text`；不开启 shell、文件系统、HTTP 等插件。
 - 生产 CSP：`default-src 'self'; connect-src ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:`；开发模式保留 Vite HMR 所需连接。
-- 不监听 `0.0.0.0`，不使用 `SO_REUSEADDR`；无认证暴露完全由用户显式选择非回环地址触发，并有常驻警告。
+- 默认不监听 `0.0.0.0`，但允许用户在明确选择通用地址时监听全部 IPv4 网卡；该状态显示更强的无认证暴露警告，并提示本机使用 `127.0.0.1`、其他设备使用本机局域网 IP。
 - 关闭 devtools 的 release 构建；不接收任何远程配置。
 
 ## Risks / Trade-offs
 
 - [Windows 防火墙首次监听弹窗] → 在 README/界面错误中提示“允许专用网络访问”；未允许时从其他设备连接会超时，错误信息建议检查防火墙。
-- [无认证 + 非回环地址 = 局域网开放代理] → 常驻高风险提示、默认选择非回环但明确展示端点；不做自动 UPnP/端口映射；用户可改选回环。
+- [无认证 + 非回环地址 = 局域网开放代理] → 常驻高风险提示、默认选择非回环但明确展示端点；`0.0.0.0` 需要用户主动选择且提示监听所有网卡；不做自动 UPnP/端口映射；用户可改选回环。
 - [IPv6 链路本地地址被排除] → 避免展示必然绑定失败的选择；需要的用户可使用全局 IPv6 或 IPv4。
 - [自研 SOCKS5 协议细节出错] → 单测覆盖编解码，集成测试跑真实握手与转发；保留切换到成熟库的模块边界（`proxy/socks5.rs` 只做协议编解码）。
 - [绑定源 IP 可能失败（网卡休眠、地址变更、回环源连外网）] → 捕获失败并回退默认路由，同时记录调试信息，不影响请求。

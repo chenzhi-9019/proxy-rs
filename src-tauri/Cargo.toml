@@ -1,6 +1,6 @@
 [package]
 name = "proxy-rs"
-version = "1.0.0"
+version = "1.0.1"
 description = "Proxy RS — 轻量无认证 SOCKS5 代理桌面端"
 authors = ["Proxy RS contributors"]
 license = "MIT"

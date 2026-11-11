@@ -89,15 +89,15 @@ impl ProxyConfig {
         if self.protocols.is_empty() {
             return Err(AppError::no_transport());
         }
-        if self.ip.is_unspecified() || self.ip.is_multicast() {
+        if self.ip.is_multicast() || (self.ip.is_unspecified() && !is_wildcard(self.ip)) {
             return Err(AppError::invalid_ip(self.ip));
         }
         Ok(())
     }
 
-    /// 确认 `ip` 仍属于当前枚举到的本机网卡。
+    /// 确认 `ip` 仍属于当前枚举到的本机网卡，或为通用的 `0.0.0.0`。
     pub fn ensure_local(&self, interfaces: &[InterfaceAddress]) -> Result<(), AppError> {
-        if interfaces.iter().any(|item| item.ip == self.ip) {
+        if is_wildcard(self.ip) || interfaces.iter().any(|item| item.ip == self.ip) {
             Ok(())
         } else {
             Err(AppError::invalid_ip(self.ip))
@@ -133,6 +133,11 @@ impl ProxyConfig {
     pub fn endpoint(&self) -> String {
         endpoint_for(self.ip, self.port_u16())
     }
+}
+
+/// 是否是“所有网卡”的通用绑定地址 `0.0.0.0`。
+pub fn is_wildcard(ip: IpAddr) -> bool {
+    matches!(ip, IpAddr::V4(value) if value.is_unspecified())
 }
 
 /// 格式化 `socks5://host:port`，IPv6 自动加方括号。
@@ -235,12 +240,25 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unspecified_or_multicast_address() {
+    fn rejects_invalid_addresses() {
         let mut cfg = config();
-        cfg.ip = "0.0.0.0".parse().unwrap();
-        assert_eq!(cfg.validate().expect_err("unspecified").code, "invalid_ip");
+        cfg.ip = "::".parse().unwrap();
+        assert_eq!(
+            cfg.validate().expect_err("unspecified v6").code,
+            "invalid_ip"
+        );
         cfg.ip = "224.0.0.1".parse().unwrap();
         assert_eq!(cfg.validate().expect_err("multicast").code, "invalid_ip");
+    }
+
+    #[test]
+    fn accepts_wildcard_address() {
+        let mut cfg = config();
+        cfg.ip = "0.0.0.0".parse().unwrap();
+        assert!(cfg.validate().is_ok());
+        assert!(cfg.ensure_local(&[]).is_ok());
+        assert_eq!(cfg.endpoint(), "socks5://0.0.0.0:1080");
+        assert!(is_wildcard(cfg.ip));
     }
 
     #[test]

@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
 use crate::interfaces;
-use crate::model::{ProxyConfig, ProxyStatus, Transport, endpoint_for, now_millis};
+use crate::model::{ProxyConfig, ProxyStatus, Transport, endpoint_for, is_wildcard, now_millis};
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 const STOP_TIMEOUT: Duration = Duration::from_secs(3);
@@ -234,7 +234,23 @@ async fn handle_session(
                     let relay_address = relay
                         .local_addr()
                         .map_err(|error| format!("读取 UDP 中继地址失败：{error}"))?;
-                    write_reply(&mut stream, socks5::REP_SUCCEEDED, Some(relay_address)).await;
+                    // 通配地址本身不可连接；回复控制连接实际使用的本地地址。
+                    let reply_address = if is_wildcard(config.ip) {
+                        stream
+                            .local_addr()
+                            .ok()
+                            .map(|local| SocketAddr::new(local.ip(), relay_address.port()))
+                            .filter(|address| !address.ip().is_unspecified())
+                            .unwrap_or_else(|| {
+                                SocketAddr::new(
+                                    IpAddr::V4(Ipv4Addr::LOCALHOST),
+                                    relay_address.port(),
+                                )
+                            })
+                    } else {
+                        relay_address
+                    };
+                    write_reply(&mut stream, socks5::REP_SUCCEEDED, Some(reply_address)).await;
                     let client_ip = peer
                         .map(|address| address.ip())
                         .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
@@ -546,6 +562,73 @@ mod tests {
             .expect("recv");
         let response = socks5::parse_udp_packet(&buffer[..length]).expect("parse");
         assert_eq!(response.payload, b"udp-hello");
+        drop(control);
+        manager.stop().await.expect("stop");
+    }
+
+    #[tokio::test]
+    async fn wildcard_binding_accepts_loopback_clients() {
+        let manager = ProxyManager::new();
+        let port = free_port().await;
+        let mut cfg = config(port, vec![Transport::Tcp]);
+        cfg.ip = "0.0.0.0".parse().unwrap();
+        cfg.interface_name = "所有网卡".into();
+        let status = manager.start(cfg).await.expect("start");
+        assert_eq!(status.endpoint.unwrap(), format!("socks5://0.0.0.0:{port}"));
+
+        let echo = echo_server().await;
+        let mut client = connect_proxy(port).await;
+        greeting(&mut client).await;
+        let (reply, _) = request(
+            &mut client,
+            socks5::CMD_CONNECT,
+            &Target::ip(echo.ip(), echo.port()),
+        )
+        .await;
+        assert_eq!(reply, socks5::REP_SUCCEEDED);
+        client.write_all(b"wildcard").await.expect("write");
+        let mut buffer = [0u8; 8];
+        client.read_exact(&mut buffer).await.expect("read");
+        assert_eq!(&buffer, b"wildcard");
+        manager.stop().await.expect("stop");
+    }
+
+    #[tokio::test]
+    async fn wildcard_udp_associate_returns_connectable_relay_address() {
+        let manager = ProxyManager::new();
+        let port = free_port().await;
+        let mut cfg = config(port, vec![Transport::Tcp, Transport::Udp]);
+        cfg.ip = "0.0.0.0".parse().unwrap();
+        cfg.interface_name = "所有网卡".into();
+        manager.start(cfg).await.expect("start");
+        let echo = udp_echo_server().await;
+
+        let mut control = connect_proxy(port).await;
+        greeting(&mut control).await;
+        let (reply, relay) = request(
+            &mut control,
+            socks5::CMD_UDP_ASSOCIATE,
+            &Target::ip("0.0.0.0".parse().unwrap(), 0),
+        )
+        .await;
+        assert_eq!(reply, socks5::REP_SUCCEEDED);
+        let relay = relay.expect("relay address");
+        assert!(
+            relay.ip().is_loopback(),
+            "wildcard relay must reply with a connectable address, got {relay}"
+        );
+
+        let client = UdpSocket::bind("127.0.0.1:0").await.expect("udp client");
+        let packet =
+            socks5::encode_udp_request(&Target::ip(echo.ip(), echo.port()), b"wildcard-udp");
+        client.send_to(&packet, relay).await.expect("send");
+        let mut buffer = [0u8; 2048];
+        let (length, _) = timeout(Duration::from_secs(2), client.recv_from(&mut buffer))
+            .await
+            .expect("response timeout")
+            .expect("recv");
+        let response = socks5::parse_udp_packet(&buffer[..length]).expect("parse");
+        assert_eq!(response.payload, b"wildcard-udp");
         drop(control);
         manager.stop().await.expect("stop");
     }
